@@ -144,7 +144,9 @@ knowledge_dna.pt {
 
 Storage volume: approximately 1.2-18 MB per domain, compared to 3+ GB for the full model. A single .dna imprint can be injected infinitely many times into any architecturally compatible model.
 
-4. KARL HBC Architecture
+4. KARL HBC Architecture (Proposed, Under Active Development)
+
+[Note: The following describes a proposed deployment architecture currently being trained and validated. The proven results in this paper are the SVD injection methods in Sections 3 and 7.]
 
 4.1 Motivation
 
@@ -493,7 +495,6 @@ ModelDNA enables a knowledge marketplace where domain expertise can be packaged,
   Injection Config  rank=32, offset=32, deep_start=14                                     
   Evaluation        HumanEval (164 problems), GSM8K (1,319 problems)                      
   Decoding          Greedy (do_sample=False)                                              
-  KARL HBC Config   K=64-128, d_model=1280, inner_dim=10240, 80 layers, 16 experts/layer  
 
 
 7.2 Main Results: Knowledge Transfer
