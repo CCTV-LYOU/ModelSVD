@@ -1,4 +1,4 @@
-# ModelDNA: Zero-Training Knowledge Transfer and Self-Evolving Architecture for Large Language Models
+# ModelSVD: Zero-Training Knowledge Transfer and Self-Evolving Architecture for Large Language Models
 
 **Authors**: CCTV-LYOU
 
@@ -8,13 +8,13 @@
 
 **Date**: June 10, 2026
 
-**Patent**: CN Patent Application -- "Method for Model Knowledge Imprint Extraction and Zero-Training Injection Based on Singular Value Decomposition"
+**Patent**: CN Patent Application Filed (Pending) -- "Method for Model Knowledge Imprint Extraction and Zero-Training Injection Based on Singular Value Decomposition"
 
 ---
 
 ## Abstract
 
-We present ModelDNA, a comprehensive framework for extracting, encoding, transferring, and deploying domain-specific knowledge in large language models without gradient computation. The framework consists of two complementary pipelines: (1) weight extraction injection, which decomposes trained weight increments via Singular Value Decomposition (SVD) to isolate knowledge-bearing singular directions, and (2) text-to-SVD encoding, which directly encodes knowledge from textual documents through hidden-state regression and Dagger-pseudoinverse projection. Both pipelines operate with zero backward passes. We further introduce KARL HBC (Knowledge-Augmented Reasoning Layer with Hypernet Basis Composition), a deployment architecture that compresses 50B parameters of equivalent knowledge capacity into 1.68B active parameters through shared basis representations, achieving a 30x compression ratio. The basis weights are updated via Hebbian learning with Oja rule stabilization, eliminating gradient-based optimization entirely. Nine acceleration modules provide an additional 10-100x training speedup through techniques including streaming randomized SVD, sketched Hebbian updates, and stochastic layer injection. Experiments on Qwen2.5-Coder-1.5B-Instruct demonstrate that SVD-encoded injection achieves 55.5% on HumanEval (vs 15.9% baseline, +39.6pp) and 60.0% on GSM8K (vs 38.3% baseline, +21.7pp) with injection times of 28-32 seconds. The method exhibits deterministic reproducibility (sigma = 0.0000% over 30 independent trials), 19x end-to-end speedup over equivalent LoRA training, and positive cross-domain spillover effects. ModelDNA establishes a new paradigm where knowledge is a first-class artifact -- extractable, purifiable, transferable, and deployable independently of model training.
+We present ModelSVD, a comprehensive framework for extracting, encoding, transferring, and deploying domain-specific knowledge in large language models without gradient computation. The framework consists of two complementary pipelines: (1) weight extraction injection, which decomposes trained weight increments via Singular Value Decomposition (SVD) to isolate knowledge-bearing singular directions, and (2) text-to-SVD encoding, which directly encodes knowledge from textual documents through hidden-state regression and Dagger-pseudoinverse projection. Both pipelines operate with zero backward passes. We further introduce KARL HBC (Knowledge-Augmented Reasoning Layer with Hypernet Basis Composition), a deployment architecture that compresses 50B parameters of equivalent knowledge capacity into 1.68B active parameters through shared basis representations, achieving a 30x compression ratio. The basis weights are updated via Hebbian learning with Oja rule stabilization, eliminating gradient-based optimization entirely. Nine acceleration modules provide an additional 10-100x training speedup through techniques including streaming randomized SVD, sketched Hebbian updates, and stochastic layer injection. Experiments on Qwen2.5-Coder-1.5B-Instruct demonstrate that SVD-encoded injection achieves 55.5% on HumanEval (vs 15.9% baseline, +39.6pp) and 60.0% on GSM8K (vs 38.3% baseline, +21.7pp) with injection times of 28-32 seconds. The method exhibits deterministic reproducibility (sigma = 0.0000% over 30 independent trials), 19x end-to-end speedup over equivalent LoRA training, and positive cross-domain spillover effects. ModelSVD establishes a new paradigm where knowledge is a first-class artifact -- extractable, purifiable, transferable, and deployable independently of model training.
 
 ---
 
@@ -29,7 +29,7 @@ The dominant paradigm for imbuing large language models (LLMs) with domain-speci
 5. **Knowledge binding**: Acquired knowledge is locked inside model weights and cannot be extracted or transferred to other models.
 6. **Scale inefficiency**: Traditional architectures store knowledge redundantly across layers and experts, requiring massive parameter counts to achieve broad coverage.
 
-We propose **ModelDNA**, a zero-training knowledge transfer framework that addresses all six limitations simultaneously. The framework extracts knowledge from a trained source model (or directly from text), purifies it through SVD-based encoding, stores it as a standardized knowledge imprint, and injects it into any architecturally compatible target model -- all without a single backward pass.
+We propose **ModelSVD**, a zero-training knowledge transfer framework that addresses all six limitations simultaneously. The framework extracts knowledge from a trained source model (or directly from text), purifies it through SVD-based encoding, stores it as a standardized knowledge imprint, and injects it into any architecturally compatible target model -- all without a single backward pass.
 
 The core discovery enabling this framework is the **natural SVD separability** of weight increments: when the weight delta matrix is decomposed, the top singular directions concentrate domain knowledge while lower directions contain optimization noise. By selectively encoding only the high-energy directions, we achieve knowledge purification that makes injection more effective than the original training.
 
@@ -51,7 +51,7 @@ Beyond the core transfer mechanism, we introduce **KARL HBC** (Knowledge-Augment
 
 ---
 
-## 3. ModelDNA Core Methods
+## 3. ModelSVD Core Methods
 
 ### 3.1 Problem Formulation
 
@@ -128,12 +128,12 @@ Method 2 decouples knowledge sources from trained models entirely. Any textual d
 
 The D^+ projection operator ensures that the constructed Delta W resides in the same linear space as the target weight matrix, achieving genuinely low-rank weight injection.
 
-### 3.5 Knowledge Imprint Format (.dna)
+### 3.5 Knowledge Imprint Format (.svd)
 
 Both methods produce a standardized knowledge imprint:
 
 ```
-knowledge_dna.pt {
+knowledge_imprint.svd {
     U_k: (d_model, k)       -- Left singular vectors
     S_k: (k,)               -- Singular values
     V_k: (k, d_inner)       -- Right singular vectors
@@ -146,7 +146,7 @@ knowledge_dna.pt {
 }
 ```
 
-Storage volume: approximately 1.2-18 MB per domain, compared to 3+ GB for the full model. A single .dna imprint can be injected infinitely many times into any architecturally compatible model.
+Storage volume: approximately 1.2-18 MB per domain, compared to 3+ GB for the full model. A single .svd imprint can be injected infinitely many times into any architecturally compatible model.
 
 ---
 
@@ -468,7 +468,7 @@ Total evolution data: approximately 6.8GB (3.07M examples).
 
 ### 6.4 Knowledge Marketplace Concept
 
-ModelDNA enables a **knowledge marketplace** where domain expertise can be packaged, traded, and deployed independently of model training. An organization with expertise in medical diagnosis can produce a .dna imprint and distribute it, allowing any compatible model to gain medical reasoning capability -- without sharing training data or model weights. This decoupling of knowledge from models has implications for:
+ModelSVD enables a **knowledge marketplace** where domain expertise can be packaged, traded, and deployed independently of model training. An organization with expertise in medical diagnosis can produce a .svd imprint and distribute it, allowing any compatible model to gain medical reasoning capability -- without sharing training data or model weights. This decoupling of knowledge from models has implications for:
 
 - **Democratizing AI**: Small teams can acquire capabilities without training budgets.
 - **Privacy-preserving knowledge sharing**: Knowledge can be transferred without exposing training data.
@@ -700,7 +700,7 @@ The dual-layer design separates concerns that are conflated in standard architec
 
 ## 9. Conclusion
 
-We have presented ModelDNA, a comprehensive framework for zero-training knowledge transfer based on Singular Value Decomposition, and KARL HBC, a deployment architecture that achieves 30x parameter compression through shared basis representations and Hebbian learning.
+We have presented ModelSVD, a comprehensive framework for zero-training knowledge transfer based on Singular Value Decomposition, and KARL HBC, a deployment architecture that achieves 30x parameter compression through shared basis representations and Hebbian learning.
 
 The framework achieves:
 
@@ -718,7 +718,7 @@ The framework achieves:
 
 The key insight -- that SVD naturally separates knowledge signals from optimization noise in neural network weights -- enables a fundamental shift in how we think about machine learning. Knowledge becomes a first-class artifact that can be extracted, purified, stored, transferred, and deployed independently of model training. The KARL HBC architecture extends this insight into a complete training and deployment system where knowledge is stored in a compressed, queryable basis bank and updated through computationally efficient Hebbian mechanisms.
 
-ModelDNA and KARL HBC together establish a new paradigm: **train once, deploy infinitely; compress globally, assemble on demand; learn without gradients, transfer without training.**
+ModelSVD and KARL HBC together establish a new paradigm: **train once, deploy infinitely; compress globally, assemble on demand; learn without gradients, transfer without training.**
 
 ---
 
@@ -795,4 +795,4 @@ ModelDNA and KARL HBC together establish a new paradigm: **train once, deploy in
 
 ---
 
-*This paper accompanies Chinese Patent Application for "Method for Model Knowledge Imprint Extraction and Zero-Training Injection Based on Singular Value Decomposition" (ModelDNA).*
+*This paper accompanies Chinese Patent Application for "Method for Model Knowledge Imprint Extraction and Zero-Training Injection Based on Singular Value Decomposition" (ModelSVD).*
