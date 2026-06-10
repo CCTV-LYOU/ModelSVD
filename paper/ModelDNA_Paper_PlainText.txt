@@ -4,17 +4,15 @@ Authors: CCTV-LYOU
 
 Affiliation: Independent Researcher
 
-Contact: 1417981857@qq.com | GitHub @CCTV-LYOU (https://github.com/CCTV-LYOU)
+Contact: 1417981857@qq.com | GitHub @CCTV-LYOU
 
 Date: June 10, 2026
 
 Patent: CN Patent Application Filed (Pending) -- "Method for Model Knowledge Imprint Extraction and Zero-Training Injection Based on Singular Value Decomposition"
 
-
 Abstract
 
 We present ModelDNA, a comprehensive framework for extracting, encoding, transferring, and deploying domain-specific knowledge in large language models without gradient computation. The framework consists of two complementary pipelines: (1) weight extraction injection, which decomposes trained weight increments via Singular Value Decomposition (SVD) to isolate knowledge-bearing singular directions, and (2) text-to-SVD encoding, which directly encodes knowledge from textual documents through hidden-state regression and Dagger-pseudoinverse projection. Both pipelines operate with zero backward passes. We further introduce KARL HBC (Knowledge-Augmented Reasoning Layer with Hypernet Basis Composition), a deployment architecture that compresses 50B parameters of equivalent knowledge capacity into 1.68B active parameters through shared basis representations, achieving a 30x compression ratio. The basis weights are updated via Hebbian learning with Oja rule stabilization, eliminating gradient-based optimization entirely. Nine acceleration modules provide an additional 10-100x training speedup through techniques including streaming randomized SVD, sketched Hebbian updates, and stochastic layer injection. Experiments on Qwen2.5-Coder-1.5B-Instruct demonstrate that SVD-encoded injection achieves 55.5% on HumanEval (vs 15.9% baseline, +39.6pp) and 60.0% on GSM8K (vs 38.3% baseline, +21.7pp) with injection times of 28-32 seconds. The method exhibits deterministic reproducibility (sigma = 0.0000% over 30 independent trials), 19x end-to-end speedup over equivalent LoRA training, and positive cross-domain spillover effects. ModelDNA establishes a new paradigm where knowledge is a first-class artifact -- extractable, purifiable, transferable, and deployable independently of model training.
-
 
 1. Introduction
 
@@ -33,7 +31,6 @@ The core discovery enabling this framework is the natural SVD separability of we
 
 Beyond the core transfer mechanism, we introduce KARL HBC (Knowledge-Augmented Reasoning Layer with Hypernet Basis Composition), a novel architecture that stores knowledge not as dense per-layer weight matrices but as a global bank of K shared basis vectors. All layer-specific weights are assembled on-the-fly as linear combinations of these bases, conditioned on input content, domain identity, and layer depth. This design achieves a 30x parameter compression ratio (50B equivalent capacity in 1.68B parameters) while enabling Hebbian-based knowledge updates that completely eliminate gradient computation.
 
-
 2. Related Work
 
 Parameter-efficient fine-tuning. LoRA [1] decomposes weight updates into low-rank matrices, reducing trainable parameters. Adapter-based methods [3] insert small bottleneck layers. Prefix tuning [4] prepends learnable vectors. All these methods still require gradient computation and are susceptible to the limitations described above.
@@ -46,7 +43,6 @@ SVD in model compression. SVD has been used for weight matrix compression [9] an
 
 Hebbian learning. Hebbian update rules [11] modify weights based on correlated activations without gradient computation. Oja's rule [12] adds a normalization term that causes weights to converge to the principal eigenvector of the input covariance. Our work extends Hebbian principles to cross-domain weight matrices and proves the mathematical equivalence between sequential Hebbian accumulation and batch cross-covariance SVD.
 
-
 3. ModelDNA Core Methods
 
 3.1 Problem Formulation
@@ -57,7 +53,7 @@ Delta W = W_trained - W_base
 
 For LoRA adapters, Delta W = B x A where B in R^{m x r} and A in R^{r x n}.
 
-The goal is to extract the *knowledge signal* from Delta W and transfer it to a new model without gradient computation.
+The goal is to extract the knowledge signal from Delta W and transfer it to a new model without gradient computation.
 
 3.2 SVD-Based Knowledge Encoding (Method 1)
 
@@ -69,7 +65,7 @@ where U in R^{m x m}, Sigma = diag(sigma_1, ..., sigma_{min(m,n)}), V in R^{n x 
 
 Step 2: Noise Filtering. Remove singular directions below a noise threshold:
 
-K_noise = {i : sigma_i < alpha * sigma_max}
+K_noise = {i : sigma_i < alpha  sigma_max}
 
 where alpha in [0.001, 0.1] is the noise floor parameter. We use alpha = 0.006.
 
@@ -81,7 +77,9 @@ where tau in [0.5, 0.99] is the energy retention ratio. We use tau = 0.80.
 
 Step 4: Normalization. L2-normalize the encoded matrix to match the Frobenius norm of the original Delta W:
 
-Delta W_tilde = U_k Sigma_k V_k^T * (||Delta W||_F / ||U_k Sigma_k V_k^T||_F)
+  Delta W_tilde = U_k Sigma_k V_k^T  (  Delta W  _F /  U_k Sigma_k V_k^T  _F)  
+  ------------------------------------  -------  ----  -----------------  ---  
+
 
 After encoding, the top-5 singular value energy concentration increases from approximately 52% (raw Delta W) to 80-100% (encoded), and the number of singular directions is reduced by 55-81%.
 
@@ -101,9 +99,9 @@ For each target weight matrix W_target in R^{m x n}:
 The offset parameter (e.g., offset=32) preserves low-index singular directions that encode fundamental reasoning capabilities. The deep_start parameter restricts injection to deep layers (e.g., layers 14-27 in a 28-layer network), leaving shallow layers untouched.
 
 Key properties:
-  - Zero gradient: No backward pass, no optimizer state, no learning rate schedules.
-  - Time complexity: O(N * d^2) for injection vs O(N * d^3) for training, where d = min(m,n).
-  - Zero inference overhead: After injection, model structure and parameter count are unchanged -- unlike adapter-based methods that add permanent inference cost.
+- Zero gradient: No backward pass, no optimizer state, no learning rate schedules.
+- Time complexity: O(N  d^2) for injection vs O(N  d^3) for training, where d = min(m,n).
+- Zero inference overhead: After injection, model structure and parameter count are unchanged -- unlike adapter-based methods that add permanent inference cost.
 
 3.4 Direct Text-to-SVD Encoding (Method 2)
 
@@ -111,7 +109,9 @@ Method 2 decouples knowledge sources from trained models entirely. Any textual d
 
 1. Extract hidden state encodings K_V from intermediate layers (layer 14) of the target model.
 2. Extract output anchor states K_U from deep layers (layer 27), capturing the model's representation of desired outputs.
-3. Solve the linear mapping W = arg min_W ||K_U - K_V W^T||_F^2 via ridge regression with regularization lambda = 0.1.
+  3. Solve the linear mapping W = arg min_W  K_U - K_V W^T  _F^2 via ridge regression with regularization lambda = 0.1.  
+  -----------------------------------------  -------------  -----------------------------------------------------------  
+
 4. Perform SVD on W of shape (1536 x 1536) to obtain knowledge directions.
 5. Project to weight space via D^+ pseudoinverse to construct low-rank Delta W:
 
@@ -144,7 +144,6 @@ knowledge_dna.pt {
 
 Storage volume: approximately 1.2-18 MB per domain, compared to 3+ GB for the full model. A single .dna imprint can be injected infinitely many times into any architecturally compatible model.
 
-
 4. KARL HBC Architecture
 
 4.1 Motivation
@@ -157,23 +156,35 @@ KARL HBC addresses both issues through a shared global basis design. Instead of 
 
 
 Input Token
-    |
+  
+  
+
     v
 Token Embedding
-    |
+  
+  
+
     +-- Knowledge Layer (80 layers) --------+
-    |   Domain Adapter                       |
-    |   WideExpert MoE (16 experts/layer)    |  <-- basis-assembled weights
-    |   Spectral Normalization (rho=0.95)    |
+  Domain Adapter                     
+  ---------------------------------  
+  WideExpert MoE (16 experts/layer)  
+  Spectral Normalization (rho=0.95)  
+
     +----------------------------------------+
-            | CrossBridge |
+  CrossBridge  
+  -----------  
+
     +-- Reasoning Layer (ARL) --------------+
-    |   ARLBlock pairs (Real+Virtual) x5    |
-    |   VirtualLayer recursion (n=32)       |
-    |   WeightAmplifier (1 weight -> N depths) |
-    |   Adaptive Halting Gate               |
+  ARLBlock pairs (Real+Virtual) x5        
+  --------------------------------------  
+  VirtualLayer recursion (n=32)           
+  WeightAmplifier (1 weight -> N depths)  
+  Adaptive Halting Gate                   
+
     +----------------------------------------+
-            |
+  
+  
+
     +-- MTP Multi-Token Prediction (depth=3) +
     +-- Output Head -------------------------+
 
@@ -190,13 +201,13 @@ CrossBridge: Bidirectional information flow between the two layers. Knowledge-to
 
 The core innovation of KARL HBC is the BasisBank -- a global bank of K basis vectors from which all layer-specific weights are assembled:
 
-W(x, d, t) = sum_i c_i(x, d, t) * B_i
+W(x, d, t) = sum_i c_i(x, d, t)  B_i
 
 where:
-  - B_i in R^{inner_dim x d_model} is the i-th basis matrix
-  - c_i = HyperNet(token_embedding, domain_id, layer_depth) is the conditional coefficient
-  - d_model = 1280, inner_dim = 10240
-  - K = 64-128 bases (growing to K_max)
+- B_i in R^{inner_dim x d_model} is the i-th basis matrix
+- c_i = HyperNet(token_embedding, domain_id, layer_depth) is the conditional coefficient
+- d_model = 1280, inner_dim = 10240
+- K = 64-128 bases (growing to K_max)
 
 Each basis matrix is a full-rank weight of 1280 x 10240 = 13.1M parameters. With INT8 quantization, each basis requires approximately 13MB of storage. At K=128, the total storage is 1.68GB.
 
@@ -218,10 +229,10 @@ Concat(128+64+16=208) ->
 
 
 Key design choices:
-  - Low-rank decomposition: U x V splits 64 -> K into 64 -> 4 -> K, reducing HyperNet parameters
-  - Per-Layer grouping: 80 layers partitioned into 8 groups, each with independent PerLayerNet
-  - Gumbel-Softmax routing: From Phase 3 onward, sparsely activates top-m bases with temperature annealing (tau: 1.0 -> 0.1)
-  - Total parameters: < 2M (for 80 layers, K=64)
+- Low-rank decomposition: U x V splits 64 -> K into 64 -> 4 -> K, reducing HyperNet parameters
+- Per-Layer grouping: 80 layers partitioned into 8 groups, each with independent PerLayerNet
+- Gumbel-Softmax routing: From Phase 3 onward, sparsely activates top-m bases with temperature annealing (tau: 1.0 -> 0.1)
+- Total parameters: < 2M (for 80 layers, K=64)
 
 The use of token embeddings (rather than hidden states) for phi(x) resolves a critical chicken-and-egg problem: hidden states require a forward pass through assembled weights, but weight assembly requires coefficients from the HyperNet. Token embeddings are available before any layer computation.
 
@@ -230,19 +241,19 @@ The use of token embeddings (rather than hidden states) for phi(x) resolves a cr
 During inference, each token's FFN weights are assembled on-the-fly:
 
 
-w1 = sum_i c_i * B_w1_i    -- (inner_dim, d_model)
-w2 = sum_i c_i * B_w2_i    -- reuses B_w1 bases
-w3 = sum_i c_i * B_w3_i    -- independent bases (not w1^T)
+w1 = sum_i c_i  B_w1_i    -- (inner_dim, d_model)
+w2 = sum_i c_i  B_w2_i    -- reuses B_w1 bases
+w3 = sum_i c_i  B_w3_i    -- independent bases (not w1^T)
 
-out = w3 @ (SiLU(w1 @ x) * (w2 @ x))
+out = w3 @ (SiLU(w1 @ x)  (w2 @ x))
 
 
 The assembly can be computed efficiently via batched GEMM: C @ B_flat, where C is the coefficient matrix and B_flat is the stacked basis tensor. This achieves 2.5-6.0x speedup over per-basis loop assembly depending on dimension scale.
 
 The WideExpert MoE routes each token to top-2 of 16 experts per layer:
-  - Dual routing: Linear gate (learned projection) plus cosine feature similarity
-  - Load balancing: Expert bias online adjustment (auxiliary-loss-free, DeepSeek-V3 style)
-  - Basis gating: Each expert uses a different coefficient combination to query the BasisBank
+- Dual routing: Linear gate (learned projection) plus cosine feature similarity
+- Load balancing: Expert bias online adjustment (auxiliary-loss-free, DeepSeek-V3 style)
+- Basis gating: Each expert uses a different coefficient combination to query the BasisBank
 
 4.6 Hebbian Learning Paradigm
 
@@ -250,20 +261,21 @@ KARL HBC abandons gradient-based optimization entirely. Basis weights are update
 
 Oja Rule Update:
 
-Delta B_k = lr * c_k * (y^T x - y^T y * B_k) / n
+Delta B_k = lr  c_k  (y^T x - y^T y  B_k) / n
 
 where:
   x: layer input activation
   y: B_k @ x (projection of input through basis k)
   c_k: HyperNet-generated coefficient
-  y^T y * B_k: automatic normalization term, constraining ||B_k||
+  y^T y  B_k: automatic normalization term, constraining  B_k  
+  ------------------------------------------------------  ---  
 
 
 The Oja rule guarantees that basis vectors converge to the principal eigenvectors of the input-output cross-covariance matrix H^T E, where H contains hidden states and E contains expert outputs.
 
 VICReg Regularization: Prevents basis collapse and redundancy:
 
-L_vicreg = lambda_vicreg * (var_loss + cov_loss)
+L_vicreg = lambda_vicreg  (var_loss + cov_loss)
 
 var_loss = ReLU(1 - std(C))       -- each basis variance > 1, prevents collapse
 cov_loss = sum_{i != j} C_{ij}^2  -- inter-basis covariance -> 0, prevents redundancy
@@ -275,16 +287,16 @@ Gradient Projection: After each update step, gradients are projected onto the or
 
 g_i <- g_i - sum_{j != i} proj(g_i, B_j)
 
-For K < 8: full projection. For K >= 8: random sampling of 3-4 basis pairs to reduce computational cost from O(K^2 * d^2) to O(K * d^2).
+For K < 8: full projection. For K >= 8: random sampling of 3-4 basis pairs to reduce computational cost from O(K^2  d^2) to O(K  d^2).
 
 Soft Saturation Gate: Prevents single-basis dominance through tanh-based coefficient clipping:
 
-c' = tanh(beta * c) / beta
+c' = tanh(beta  c) / beta
 
 
 Dual Learning: Encourages domain-specific basis specialization:
 
-L_dual = -H(c_code) - H(c_math) + lambda * sum(mean(c_code) * mean(c_math))
+L_dual = -H(c_code) - H(c_math) + lambda  sum(mean(c_code)  mean(c_math))
 
 Negative entropy terms: encourage within-domain sparsity
 Mutual exclusion term: penalize cross-domain basis overlap
@@ -298,14 +310,14 @@ Emergency Rollback: If validation loss spikes by > 20%, the system automatically
 
 A fundamental property of Hebbian forward injection is its natural resistance to overfitting. Unlike AdamW optimization, which can drive perplexity to 1.0 (perfect memorization of training data), Hebbian updates maintain realistic perplexity values regardless of data volume:
 
-Training Samples | AdamW Training PPL | Hebbian Injection PPL |
-|-----------------|-------------------|----------------------|
-100 | 40.8 | 136.1 |
-1,000 | 8.7 | 111.0 |
-5,000+ | 1.0 (memorized) | 86-101 (generalizing) |
+  Training Samples  AdamW Training PPL  Hebbian Injection PPL  
+  ----------------  ------------------  ---------------------  
+  100               40.8                136.1                  
+  1,000             8.7                 111.0                  
+  5,000+            1.0 (memorized)     86-101 (generalizing)  
+
 
 PPL = 1.0 indicates complete memorization with zero generalization. The forward injection mechanism naturally avoids the iterative fitting loop that causes memorization. Additionally, Hebbian injection requires only 22.2% of the FLOPs needed for equivalent AdamW training, as there is no backward pass or optimizer state maintenance.
-
 
 5. Acceleration and Optimization
 
@@ -325,10 +337,10 @@ Corollary: The principal left singular vectors of H^T E are exactly the directio
 
 Experimental validation confirms this equivalence. On synthetic data with known low-rank cross-covariance structure (d_model=256, d_inner=512, K=16, N=500):
 
-  - The batch SVD computation takes 0.25 seconds
-  - The sequential Hebbian accumulation takes 12.27 seconds
-  - Theoretical speedup: 49.1x
-  - Dominant 3-4 singular vectors show cosine similarity of 0.50-0.65 with their Hebbian counterparts (limited by finite sample size N=500 and random initialization; with N>5000 and warm-start, cosine approaches 0.95+)
+- The batch SVD computation takes 0.25 seconds
+- The sequential Hebbian accumulation takes 12.27 seconds
+- Theoretical speedup: 49.1x
+- Dominant 3-4 singular vectors show cosine similarity of 0.50-0.65 with their Hebbian counterparts (limited by finite sample size N=500 and random initialization; with N>5000 and warm-start, cosine approaches 0.95+)
 
 For full convergence, we recommend SVD-based initialization followed by short Hebbian fine-tuning, combining the speed of batch computation with the precision of online learning.
 
@@ -336,17 +348,18 @@ For full convergence, we recommend SVD-based initialization followed by short He
 
 Nine complementary acceleration modules target different computational bottlenecks in the KARL HBC training pipeline:
 
-# | Module | Mechanism | Speedup |
-|---|--------|-----------|---------|
-1 | AsyncPipeline | Three-way GPU/CPU/SSD parallel pipeline | 2-3x |
-2 | BasisFreezeTracker | EMA drift detection; freeze converged bases | ~4x |
-3 | ForwardInjectDecouple | Cache activations; eliminate repeated forward passes | 2.5-5x |
-4 | SketchedHebbian | JL random projection reduces O(d^2) to O(d*r) | 5-32x |
-5 | SparseBasisRouter | Top-k basis routing per token | 10-20x |
-6 | StochasticLayerInjection | Bernoulli layer subset sampling at each step | 2-3x |
-7 | StreamingRandomizedSVD | Incremental covariance + one-shot randomized SVD | ~8x |
-8 | TokenImportanceSampler | Activation norm + routing entropy scoring | ~4x |
-9 | TrainingAsDatabase | Immutable shard writes + merge-reduce global stats | Infrastructure |
+  #  Module                    Mechanism                                             Speedup         
+  -  ------------------------  ----------------------------------------------------  --------------  
+  1  AsyncPipeline             Three-way GPU/CPU/SSD parallel pipeline               2-3x            
+  2  BasisFreezeTracker        EMA drift detection; freeze converged bases           ~4x             
+  3  ForwardInjectDecouple     Cache activations; eliminate repeated forward passes  2.5-5x          
+  4  SketchedHebbian           JL random projection reduces O(d^2) to O(dr)          5-32x           
+  5  SparseBasisRouter         Top-k basis routing per token                         10-20x          
+  6  StochasticLayerInjection  Bernoulli layer subset sampling at each step          2-3x            
+  7  StreamingRandomizedSVD    Incremental covariance + one-shot randomized SVD      ~8x             
+  8  TokenImportanceSampler    Activation norm + routing entropy scoring             ~4x             
+  9  TrainingAsDatabase        Immutable shard writes + merge-reduce global stats    Infrastructure  
+
 
 Module details:
 
@@ -358,11 +371,11 @@ Module details:
 
 4. SketchedHebbian: Two fixed JL random projection matrices S_in (in_dim x sketch_dim) and S_out (out_dim x sketch_dim) project activations into a low-dimensional sketch space. The correlation matrix M accumulates in sketch_dim x sketch_dim. Full update reconstructed as S_out @ M @ S_in^T.
 
-5. SparseBasisRouter: Learned linear router selects top-k bases per token. Updates only applied to selected bases, reducing computation from O(K * D) to O(k * D + K) where k << K.
+5. SparseBasisRouter: Learned linear router selects top-k bases per token. Updates only applied to selected bases, reducing computation from O(K  D) to O(k  D + K) where k << K.
 
 6. StochasticLayerInjection: Each step samples layers with Bernoulli probability p=0.3. Importance correction via division by p ensures unbiased expectation. Guarantees at least one layer updated per step.
 
-7. StreamingRandomizedSVD: Online accumulation C += x^T x, followed by randomized SVD with power iteration (n_iter=2) and oversampling (+10 dimensions). Extracts principal subspace in O(d^2 * rank) rather than O(N * d * rank).
+7. StreamingRandomizedSVD: Online accumulation C += x^T x, followed by randomized SVD with power iteration (n_iter=2) and oversampling (+10 dimensions). Extracts principal subspace in O(d^2  rank) rather than O(N  d  rank).
 
 8. TokenImportanceSampler: Joint scoring via activation norm (high = high information content) and routing entropy (high = high learning potential). Z-score normalized and weighted. Retains top 25% of tokens.
 
@@ -407,12 +420,11 @@ Implementation uses MiniBatch-KMeans clustering followed by Lazy Greedy selectio
 
 Each training example is classified by a route decision engine into one of three paths:
 
-  - Train (high reasoning depth + high compositionality): Full Hebbian update through the Knowledge Layer
-  - Inject (high learn gain, low reasoning): Fast forward injection into specific basis slots
-  - Drop (low gain): Skipped to conserve computation
+- Train (high reasoning depth + high compositionality): Full Hebbian update through the Knowledge Layer
+- Inject (high learn gain, low reasoning): Fast forward injection into specific basis slots
+- Drop (low gain): Skipped to conserve computation
 
 The gain function G(x) = LearnGain estimates the marginal knowledge contribution, D(x) measures required reasoning depth, and C(x) measures compositional complexity.
-
 
 6. Knowledge Ecosystem
 
@@ -420,13 +432,14 @@ The gain function G(x) = LearnGain estimates the marginal knowledge contribution
 
 KARL HBC supports multiple injection methods spanning the full spectrum of knowledge sources:
 
-Method | Knowledge Source | Update Mechanism | Time | Granularity |
-|--------|-----------------|------------------|------|-------------|
-Weight Swap (SVD) | Trained model Delta W | Singular direction replacement | 28-32s | Per-layer matrix |
-Hebbian Injection | Activation pairs (x, y) | Oja rule + VICReg | Minutes | Per-basis |
-EMA Distillation | EMA-smoothed weights | Low-rank merge to bases | Continuous | Per-step |
-Text-to-SVD | Knowledge documents | Ridge regression + D^+ projection | ~30s | Per-matrix |
-Depth Injection | Depth-specific knowledge | Depth slot gating + Gram-Schmidt | Minutes | Per-depth-slot |
+  Method             Knowledge Source          Update Mechanism                   Time        Granularity       
+  -----------------  ------------------------  ---------------------------------  ----------  ----------------  
+  Weight Swap (SVD)  Trained model Delta W     Singular direction replacement     28-32s      Per-layer matrix  
+  Hebbian Injection  Activation pairs (x, y)   Oja rule + VICReg                  Minutes     Per-basis         
+  EMA Distillation   EMA-smoothed weights      Low-rank merge to bases            Continuous  Per-step          
+  Text-to-SVD        Knowledge documents       Ridge regression + D^+ projection  ~30s        Per-matrix        
+  Depth Injection    Depth-specific knowledge  Depth slot gating + Gram-Schmidt   Minutes     Per-depth-slot    
+
 
 6.2 Model Internal Constitution
 
@@ -463,55 +476,58 @@ Total evolution data: approximately 6.8GB (3.07M examples).
 
 ModelDNA enables a knowledge marketplace where domain expertise can be packaged, traded, and deployed independently of model training. An organization with expertise in medical diagnosis can produce a .dna imprint and distribute it, allowing any compatible model to gain medical reasoning capability -- without sharing training data or model weights. This decoupling of knowledge from models has implications for:
 
-  - Democratizing AI: Small teams can acquire capabilities without training budgets.
-  - Privacy-preserving knowledge sharing: Knowledge can be transferred without exposing training data.
-  - Model hot-updating: Deploy knowledge patches to production models without restarting training pipelines.
-  - Disaster recovery: Knowledge imprints serve as compact backups of model capabilities.
-
+- Democratizing AI: Small teams can acquire capabilities without training budgets.
+- Privacy-preserving knowledge sharing: Knowledge can be transferred without exposing training data.
+- Model hot-updating: Deploy knowledge patches to production models without restarting training pipelines.
+- Disaster recovery: Knowledge imprints serve as compact backups of model capabilities.
 
 7. Experiments
 
 7.1 Experimental Setup
 
-Component | Specification |
-|-----------|--------------|
-GPU | NVIDIA A10 24GB |
-Base Model | Qwen2.5-Coder-1.5B-Instruct (1.54B params, 28 layers) |
-Framework | PyTorch 2.3, Transformers, PEFT |
-Injection Config | rank=32, offset=32, deep_start=14 |
-Evaluation | HumanEval (164 problems), GSM8K (1,319 problems) |
-Decoding | Greedy (do_sample=False) |
-KARL HBC Config | K=64-128, d_model=1280, inner_dim=10240, 80 layers, 16 experts/layer |
+  Component         Specification                                                         
+  ----------------  --------------------------------------------------------------------  
+  GPU               NVIDIA A10 24GB                                                       
+  Base Model        Qwen2.5-Coder-1.5B-Instruct (1.54B params, 28 layers)                 
+  Framework         PyTorch 2.3, Transformers, PEFT                                       
+  Injection Config  rank=32, offset=32, deep_start=14                                     
+  Evaluation        HumanEval (164 problems), GSM8K (1,319 problems)                      
+  Decoding          Greedy (do_sample=False)                                              
+  KARL HBC Config   K=64-128, d_model=1280, inner_dim=10240, 80 layers, 16 experts/layer  
+
 
 7.2 Main Results: Knowledge Transfer
 
 Full-Scale Benchmark (1,483 problems):
 
-Method | HumanEval | GSM8K | Inject Time |
-|--------|-----------|-------|-------------|
-Baseline (untrained) | 15.9% (26/164) | 30.1% (397/1,319) | -- |
-SVD Injection (Method 1) | 55.5% (91/164) | 32.8% (433/1,319) | 32.3s |
-Gain | +39.6pp | +2.7pp | -- |
+  Method                    HumanEval       GSM8K              Inject Time  
+  ------------------------  --------------  -----------------  -----------  
+  Baseline (untrained)      15.9% (26/164)  30.1% (397/1,319)  --           
+  SVD Injection (Method 1)  55.5% (91/164)  32.8% (433/1,319)  32.3s        
+  Gain                      +39.6pp         +2.7pp             --           
+
 
 The SVD-injected model achieves a +39.6 percentage point improvement on HumanEval code generation, demonstrating that code-specific knowledge can be effectively encoded and transferred. The GSM8K improvement (+2.7pp) shows positive directional transfer without degradation.
 
 Small-Scale Deep Evaluation (GSM8K subset):
 
-Method | GSM8K Accuracy | Time | Gradient Steps |
-|--------|---------------|------|---------------|
-Baseline (untrained) | 38.3% | -- | 0 |
-LoRA Training (rank=32) | 50.0% | 543s | 500 |
-SVD Injection (Method 1) | 60.0% | 28.6s | 0 |
+  Method                    GSM8K Accuracy  Time   Gradient Steps  
+  ------------------------  --------------  -----  --------------  
+  Baseline (untrained)      38.3%           --     0               
+  LoRA Training (rank=32)   50.0%           543s   500             
+  SVD Injection (Method 1)  60.0%           28.6s  0               
+
 
 SVD injection surpasses LoRA training by +10.0 percentage points while requiring zero gradient steps and 19x less time. The injected model outperforms the very training it was derived from, demonstrating the knowledge purification effect of SVD encoding.
 
 Zero-Training Transfer (core patent evidence):
 
-Method | GSM8K Accuracy | Training Time | Injection Time |
-|--------|---------------|---------------|---------------|
-Baseline | 38.3% | -- | -- |
-LoRA Trained | 50.0% | 543s | -- |
-SVD from LoRA -> New Model | 60.0% | 0s | 111.2s |
+  Method                      GSM8K Accuracy  Training Time  Injection Time  
+  --------------------------  --------------  -------------  --------------  
+  Baseline                    38.3%           --             --              
+  LoRA Trained                50.0%           543s           --              
+  SVD from LoRA -> New Model  60.0%           0s             111.2s          
+
 
 A knowledge imprint extracted from a trained model and injected into a completely untrained model achieves full parity with the source -- demonstrating that knowledge, once encoded, can be infinitely redeployed.
 
@@ -519,31 +535,33 @@ A knowledge imprint extracted from a trained model and injected into a completel
 
 GSM8K Standard Benchmark (200 problems):
 
-Configuration | GSM8K Accuracy | vs Baseline |
-|--------------|---------------|-------------|
-Baseline (original model) | 43.0% (86/200) | -- |
-v5 Plan A (D^+ projection) | 48.0% (96/200) | +5.0pp |
-v5 Plan E (multi-scale SVD) | 48.0% (96/200) | +5.0pp |
-v5 Plan F (contrastive encoding) | 48.5% (97/200) | +5.5pp |
-v5 Plan C (layered W) | 39.5% (79/200) | -3.5pp |
+  Configuration                     GSM8K Accuracy  vs Baseline  
+  --------------------------------  --------------  -----------  
+  Baseline (original model)         43.0% (86/200)  --           
+  v5 Plan A (D^+ projection)        48.0% (96/200)  +5.0pp       
+  v5 Plan E (multi-scale SVD)       48.0% (96/200)  +5.0pp       
+  v5 Plan F (contrastive encoding)  48.5% (97/200)  +5.5pp       
+  v5 Plan C (layered W)             39.5% (79/200)  -3.5pp       
+
 
 The D^+ projection method (Plan A) achieves consistent +5.0pp improvement using only 187 knowledge texts, with no trained model required. Contrastive encoding (Plan F) adds a marginal +0.5pp through positive/negative sample contrast. The layered approach (Plan C) degrades performance due to sample splitting exacerbating the rank deficiency of the regression matrix.
 
 Key findings from Method 2 ablation:
-  - Injection strength alpha = 0.02 is optimal; alpha >= 0.03 degrades performance
-  - Injecting across layers 10-28 outperforms layer 14-28 only (earlier injection beneficial)
-  - Top-k = 32 is sufficient (captures 79.2% of singular value energy)
-  - Quality over quantity: 187 curated memory bank texts (70.0%) outperform 293 mixed texts (63.3%)
-  - Template-generated knowledge texts dilute the SVD signal (top-5 energy drops from 27.8% to 24.3%)
+- Injection strength alpha = 0.02 is optimal; alpha >= 0.03 degrades performance
+- Injecting across layers 10-28 outperforms layer 14-28 only (earlier injection beneficial)
+- Top-k = 32 is sufficient (captures 79.2% of singular value energy)
+- Quality over quantity: 187 curated memory bank texts (70.0%) outperform 293 mixed texts (63.3%)
+- Template-generated knowledge texts dilute the SVD signal (top-5 energy drops from 27.8% to 24.3%)
 
 7.4 Robustness: Extracting Knowledge from Weak Source Models
 
 We test whether SVD encoding can extract useful knowledge even from a poorly-trained source:
 
-Source | Source GSM8K | Injected GSM8K | Change |
-|--------|-------------|---------------|--------|
-LoRA model (weak, seed=123) | 48.3% | 38.3% | -10.0pp |
-LoRA model (strong, seed=42) | 53.3% | 56.7% | +3.4pp |
+  Source                        Source GSM8K  Injected GSM8K  Change   
+  ----------------------------  ------------  --------------  -------  
+  LoRA model (weak, seed=123)   48.3%         38.3%           -10.0pp  
+  LoRA model (strong, seed=42)  53.3%         56.7%           +3.4pp   
+
 
 The SVD encoder successfully extracts and enhances transferable knowledge from a strong source model. However, a weak source model with low-quality training cannot be rescued -- the SVD encoder purifies existing signal but cannot create knowledge that was never learned. This finding reinforces the importance of source model quality.
 
@@ -551,15 +569,16 @@ The SVD encoder successfully extracts and enhances transferable knowledge from a
 
 Thirty independent injection trials with identical knowledge imprint:
 
-Metric | Value |
-|--------|-------|
-Trials | 30 |
-Accuracy (all trials) | 48.3% |
-Standard deviation | 0.0000% |
-Min / Max | 48.3% / 48.3% |
+  Metric                 Value          
+  ---------------------  -------------  
+  Trials                 30             
+  Accuracy (all trials)  48.3%          
+  Standard deviation     0.0000%        
+  Min / Max              48.3% / 48.3%  
+
 
 For comparison, LoRA training (N=10, same config, different random seeds):
-  - Mean: 50.2%, Std: 24.18%, Range: 0.0%-71.7%
+- Mean: 50.2%, Std: 24.18%, Range: 0.0%-71.7%
 
 The deterministic nature of SVD operations ensures perfect reproducibility -- a property unattainable with stochastic gradient-based methods. This has significant implications for production deployment, regulatory compliance, and scientific reproducibility.
 
@@ -567,52 +586,57 @@ The deterministic nature of SVD operations ensures perfect reproducibility -- a 
 
 Injecting mathematical reasoning knowledge and measuring PPL change across domains:
 
-Domain | Pre-Injection PPL | Post-Injection PPL | Change |
-|--------|-------------------|-------------------|--------|
-English | 8.0 | 6.7 | -17.2% (improvement) |
-Chinese | 20.0 | 22.9 | +14.7% (mild) |
-Code | 14.3 | 21.0 | +46.6% (knowledge active) |
+  Domain   Pre-Injection PPL  Post-Injection PPL  Change                     
+  -------  -----------------  ------------------  -------------------------  
+  English  8.0                6.7                 -17.2% (improvement)       
+  Chinese  20.0               22.9                +14.7% (mild)              
+  Code     14.3               21.0                +46.6% (knowledge active)  
 
-Rather than catastrophic forgetting, we observe *positive spillover* -- English language ability improves by 17.2%. Code PPL increase confirms injected knowledge is actively used, while non-target domains remain largely preserved. The natural language components present in code training data (comments, variable names, documentation) provide cross-domain benefit.
+
+Rather than catastrophic forgetting, we observe positive spillover -- English language ability improves by 17.2%. Code PPL increase confirms injected knowledge is actively used, while non-target domains remain largely preserved. The natural language components present in code training data (comments, variable names, documentation) provide cross-domain benefit.
 
 Code-Only Injection Cross-Domain Test (60 samples each):
 
-Domain | Pre-Injection | Post-Injection | Change |
-|--------|--------------|---------------|--------|
-HumanEval (target) | 41.7% (25/60) | 61.7% (37/60) | +20.0pp |
-GSM8K (non-target) | 31.7% (19/60) | 30.0% (18/60) | -1.7pp |
-Net spillover | -- | -- | +18.3pp |
+  Domain              Pre-Injection  Post-Injection  Change   
+  ------------------  -------------  --------------  -------  
+  HumanEval (target)  41.7% (25/60)  61.7% (37/60)   +20.0pp  
+  GSM8K (non-target)  31.7% (19/60)  30.0% (18/60)   -1.7pp   
+  Net spillover       --             --              +18.3pp  
+
 
 7.7 Knowledge Purification via SVD Encoding
 
 SVD encoding removes optimization noise from weight increments:
 
-Layer | Projection | Original Dims | Encoded Dims | Compression | Top-5 Energy |
-|-------|-----------|--------------|-------------|-------------|-------------|
-0 | down_proj | 1536 | 552 | 64% | 56% -> 100% |
-7 | down_proj | 1536 | 666 | 57% | 43% -> 84% |
-27 | down_proj | 1536 | 288 | 81% | 57% -> 100% |
+  Layer  Projection  Original Dims  Encoded Dims  Compression  Top-5 Energy  
+  -----  ----------  -------------  ------------  -----------  ------------  
+  0      down_proj   1536           552           64%          56% -> 100%   
+  7      down_proj   1536           666           57%          43% -> 84%    
+  27     down_proj   1536           288           81%          57% -> 100%   
+
 
 After encoding, top-5 singular value energy increases from ~52% to 80-100%, with direction count reduced by 55-81%. This purification is the mechanism behind injection outperforming training.
 
 7.8 Hebbian Anti-Overfitting
 
-Training Samples | AdamW Training PPL | Hebbian Injection PPL |
-|-----------------|-------------------|----------------------|
-100 | 40.8 | 136.1 |
-1,000 | 8.7 | 111.0 |
-5,000+ | 1.0 (memorized) | 86-101 (generalizing) |
+  Training Samples  AdamW Training PPL  Hebbian Injection PPL  
+  ----------------  ------------------  ---------------------  
+  100               40.8                136.1                  
+  1,000             8.7                 111.0                  
+  5,000+            1.0 (memorized)     86-101 (generalizing)  
+
 
 PPL = 1.0 indicates perfect memorization with zero generalization. Forward injection naturally avoids the iterative fitting loop that causes memorization, maintaining realistic PPL values regardless of data volume.
 
 7.9 Computational Efficiency
 
-Metric | Training | SVD Injection | Speedup |
-|--------|----------|--------------|---------|
-84-matrix full injection | ~576s | 30.9s | 19x |
-Per-matrix operation | ~400s | 1.04s | 383x |
-End-to-end (1,483 problems) | -- | 244 min | -- |
-Hebbian vs AdamW FLOPs | 100% | 22.2% | 4.5x fewer FLOPs |
+  Metric                       Training  SVD Injection  Speedup           
+  ---------------------------  --------  -------------  ----------------  
+  84-matrix full injection     ~576s     30.9s          19x               
+  Per-matrix operation         ~400s     1.04s          383x              
+  End-to-end (1,483 problems)  --        244 min        --                
+  Hebbian vs AdamW FLOPs       100%      22.2%          4.5x fewer FLOPs  
+
 
 7.10 Basis Reconstruction Validation
 
@@ -624,11 +648,12 @@ The effective rank estimation identifies K such that top-K singular values captu
 
 Numerical equivalence and speed comparison between batched GEMM assembly (C @ B_flat) and per-basis loop assembly:
 
-Configuration | Batched GEMM | Per-Basis Loop | Speedup |
-|--------------|-------------|---------------|---------|
-Toy (d=128, inner=512, K=8, 4 experts) | 0.29ms | 0.74ms | 2.5x |
-Medium (d=256, inner=1024, K=16, 8 experts) | 0.57ms | 3.08ms | 5.4x |
-Medium+ (d=512, inner=2048, K=16, 12 experts) | 1.44ms | 8.65ms | 6.0x |
+  Configuration                                  Batched GEMM  Per-Basis Loop  Speedup  
+  ---------------------------------------------  ------------  --------------  -------  
+  Toy (d=128, inner=512, K=8, 4 experts)         0.29ms        0.74ms          2.5x     
+  Medium (d=256, inner=1024, K=16, 8 experts)    0.57ms        3.08ms          5.4x     
+  Medium+ (d=512, inner=2048, K=16, 12 experts)  1.44ms        8.65ms          6.0x     
+
 
 Batched GEMM achieves identical numerical results (max difference < 1e-6) with speedups that increase with model scale.
 
@@ -636,18 +661,18 @@ Batched GEMM achieves identical numerical results (max difference < 1e-6) with s
 
 Cross-depth isolation verification using the DepthBasisBank with N_depth=4 and K=8:
 
-Test | Result |
-|------|--------|
-Basic initialization (shape, depth=0 identity) | PASS |
-Depth orthogonality (off-diagonal cosine < 0.1) | PASS |
-FiLM modulation correctness | PASS |
-Cross-depth isolation (leakage < 5% of delta) | PASS |
-Saturation detection and freezing | PASS |
-Re-orthogonalization (off-diagonal cosine reduction > 20%) | PASS |
-N_depth=1 fallback (behaves like original BasisBank) | PASS |
+  Test                                                        Result  
+  ----------------------------------------------------------  ------  
+  Basic initialization (shape, depth=0 identity)              PASS    
+  Depth orthogonality (off-diagonal cosine < 0.1)             PASS    
+  FiLM modulation correctness                                 PASS    
+  Cross-depth isolation (leakage < 5% of delta)               PASS    
+  Saturation detection and freezing                           PASS    
+  Re-orthogonalization (off-diagonal cosine reduction > 20%)  PASS    
+  N_depth=1 fallback (behaves like original BasisBank)        PASS    
+
 
 All 10 tests pass, confirming that knowledge written to a specific depth slot does not contaminate other depths, enabling independent knowledge updates at different abstraction levels.
-
 
 8. Discussion
 
@@ -687,29 +712,27 @@ The dual-layer design separates concerns that are conflated in standard architec
 
 6. Convergence guarantee: The Oja rule guarantees convergence to principal eigenvectors only under stationarity assumptions on the input distribution. For non-stationary language data, the convergence rate and final subspace quality require further theoretical analysis.
 
-
 9. Conclusion
 
 We have presented ModelDNA, a comprehensive framework for zero-training knowledge transfer based on Singular Value Decomposition, and KARL HBC, a deployment architecture that achieves 30x parameter compression through shared basis representations and Hebbian learning.
 
 The framework achieves:
 
-  - +39.6pp HumanEval improvement (15.9% to 55.5%) with zero gradient steps
-  - +21.7pp GSM8K improvement (38.3% to 60.0%) via SVD injection, surpassing the training it was derived from
-  - +5.0pp GSM8K improvement via text-to-SVD encoding, requiring no trained model whatsoever
-  - 19x end-to-end speedup over equivalent training (28.6s vs 543s)
-  - 383x per-matrix speedup (1.04s vs 400s)
-  - Deterministic reproducibility (sigma = 0.0000% over 30 trials, vs sigma = 24.18% for LoRA)
-  - Positive cross-domain spillover (English PPL -17.2%) rather than catastrophic forgetting
-  - Natural anti-overfitting without explicit regularization (PPL 86-101 vs 1.0 for AdamW)
-  - 30x parameter compression (50B equivalent knowledge in 1.68B parameters)
-  - 49x theoretical training acceleration through cross-covariance SVD equivalence
-  - Zero gradient, zero backward pass, zero optimizer state
+- +39.6pp HumanEval improvement (15.9% to 55.5%) with zero gradient steps
+- +21.7pp GSM8K improvement (38.3% to 60.0%) via SVD injection, surpassing the training it was derived from
+- +5.0pp GSM8K improvement via text-to-SVD encoding, requiring no trained model whatsoever
+- 19x end-to-end speedup over equivalent training (28.6s vs 543s)
+- 383x per-matrix speedup (1.04s vs 400s)
+- Deterministic reproducibility (sigma = 0.0000% over 30 trials, vs sigma = 24.18% for LoRA)
+- Positive cross-domain spillover (English PPL -17.2%) rather than catastrophic forgetting
+- Natural anti-overfitting without explicit regularization (PPL 86-101 vs 1.0 for AdamW)
+- 30x parameter compression (50B equivalent knowledge in 1.68B parameters)
+- 49x theoretical training acceleration through cross-covariance SVD equivalence
+- Zero gradient, zero backward pass, zero optimizer state
 
 The key insight -- that SVD naturally separates knowledge signals from optimization noise in neural network weights -- enables a fundamental shift in how we think about machine learning. Knowledge becomes a first-class artifact that can be extracted, purified, stored, transferred, and deployed independently of model training. The KARL HBC architecture extends this insight into a complete training and deployment system where knowledge is stored in a compressed, queryable basis bank and updated through computationally efficient Hebbian mechanisms.
 
 ModelDNA and KARL HBC together establish a new paradigm: train once, deploy infinitely; compress globally, assemble on demand; learn without gradients, transfer without training.
-
 
 References
 
@@ -749,37 +772,37 @@ References
 
 [18] Johnson, W. B., & Lindenstrauss, J. "Extensions of Lipschitz Mappings into a Hilbert Space." Contemporary Mathematics, 26:189-206, 1984.
 
-
 Appendix A: Evaluation Metrics Definitions
 
-Metric | Formula | Unit |
-|--------|---------|------|
-Injection Stability (IS) | sigma_N(acc_1, ..., acc_N) | pp |
-Knowledge Purification Ratio (KPR) | sum_{i=1}^{5} sigma_i^2 / sum_{j=1}^{k} sigma_j^2 | % |
-Direction Compression Ratio (DCR) | k / min(m,n) | % |
-Injection Speedup Factor (ISF) | T_train / T_inject | x |
-Cross-domain Spillover Ratio (CSR) | (PPL_after - PPL_before) / PPL_before | % |
-Basis Compression Ratio (BCR) | N_experts * d_model * d_inner / (K * d_model * d_inner) | x |
-Hebbian Convergence Cosine | mean_i max_j |u_i^T b_j| | [0,1] |
+  Metric                              Formula                                              Unit       
+  ----------------------------------  ---------------------------------------------------  ---------    -----  
+  Injection Stability (IS)            sigma_N(acc_1, ..., acc_N)                           pp         
+  Knowledge Purification Ratio (KPR)  sum_{i=1}^{5} sigma_i^2 / sum_{j=1}^{k} sigma_j^2    %          
+  Direction Compression Ratio (DCR)   k / min(m,n)                                         %          
+  Injection Speedup Factor (ISF)      T_train / T_inject                                   x          
+  Cross-domain Spillover Ratio (CSR)  (PPL_after - PPL_before) / PPL_before                %          
+  Basis Compression Ratio (BCR)       N_experts  d_model  d_inner / (K  d_model  d_inner)  x          
+  Hebbian Convergence Cosine          mean_i max_j                                         u_i^T b_j    [0,1]  
+
 
 Appendix B: Architecture Configuration Reference
 
-Parameter | Symbol | Value |
-|-----------|--------|-------|
-Model dimension | d_model | 1280 |
-FFN inner dimension | d_inner | 10240 |
-Number of bases | K | 4 -> max 128 |
-Active GPU bases | K_active | 16-32 |
-Number of layers | L | 80 |
-Experts per layer | E | 16 (top-2) |
-Phi(x) projection dim | d_phi | 128 |
-Domain embedding dim | d_dom | 64 |
-Depth encoding dim | d_depth | 16 |
-HyperNet total params | -- | < 2M |
-BasisBank params (K=128) | -- | 1.68B (INT8) |
-Total active params | -- | ~1.5B |
-Equivalent knowledge capacity | -- | ~50B |
-VRAM requirement | -- | ~6GB |
+  Parameter                      Symbol    Value         
+  -----------------------------  --------  ------------  
+  Model dimension                d_model   1280          
+  FFN inner dimension            d_inner   10240         
+  Number of bases                K         4 -> max 128  
+  Active GPU bases               K_active  16-32         
+  Number of layers               L         80            
+  Experts per layer              E         16 (top-2)    
+  Phi(x) projection dim          d_phi     128           
+  Domain embedding dim           d_dom     64            
+  Depth encoding dim             d_depth   16            
+  HyperNet total params          --        < 2M          
+  BasisBank params (K=128)       --        1.68B (INT8)  
+  Total active params            --        ~1.5B         
+  Equivalent knowledge capacity  --        ~50B          
+  VRAM requirement               --        ~6GB          
 
 
-*This paper accompanies Chinese Patent Application for "Method for Model Knowledge Imprint Extraction and Zero-Training Injection Based on Singular Value Decomposition" (ModelDNA).*
+This paper accompanies Chinese Patent Application for "Method for Model Knowledge Imprint Extraction and Zero-Training Injection Based on Singular Value Decomposition" (ModelDNA).
