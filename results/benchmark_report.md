@@ -1,4 +1,4 @@
-# ModelDNA Benchmark Report
+# ModelSVD Benchmark Report
 
 **Date**: 2026-06-07
 **Platform**: NVIDIA RTX 4050 Laptop (6GB) / NVIDIA A10 (24GB)

@@ -1,5 +1,5 @@
 """
-ModelDNA: SVD Knowledge Injection — Algorithm Sketch
+ModelSVD: SVD Knowledge Injection — Algorithm Sketch
 =====================================================
 ACADEMIC REFERENCE ONLY. This is pseudocode for illustrating the method.
 It is NOT executable and deliberately omits critical implementation details.

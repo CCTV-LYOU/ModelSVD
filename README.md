@@ -1,10 +1,10 @@
-# ModelDNA: Zero-Training Knowledge Transfer via SVD Injection
+# ModelSVD: Zero-Training Knowledge Transfer via SVD Injection
 
-**ModelDNA** is a novel zero-training knowledge extraction and injection method based on Singular Value Decomposition (SVD). It extracts "knowledge fingerprints" from trained model weight deltas and injects them into target models without any gradient computation or backpropagation.
+**ModelSVD** is a novel zero-training knowledge extraction and injection method based on Singular Value Decomposition (SVD). It extracts "knowledge fingerprints" from trained model weight deltas and injects them into target models without any gradient computation or backpropagation.
 
 ## Key Results
 
-| Metric | LoRA Fine-tuning | ModelDNA (ours) |
+| Metric | LoRA Fine-tuning | ModelSVD (ours) |
 |--------|-----------------|-----------------|
 | HumanEval pass@1 | 9.1% | **20.1%** (+11.0pp) |
 | Catastrophic Forgetting | -7.4pp on HE | **0.0pp** (eliminated) |
